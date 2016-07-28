@@ -15,8 +15,10 @@ library(dplyr)
 # my_sheets %>% glimpse()
 
 
-# Grab the Google Sheet
+# Grab the Google Sheets
 sheet <- gs_key("1LXBrz-JCwct2zTLYdkgsj-OKER9dofl4Qkixh2BPrEc")
+sheetRiddles <- gs_key("1S5PSwSPU8co-EnkvII6BKO0DPxAOBtzjc5nCS5hpEx0")
+dtaRiddles <- gs_read(sheetRiddles)
 
 # constant 
 DistOffset <- 4.6 # survey tool distance from center of dowel to measurement mark
@@ -46,7 +48,9 @@ Convert2yCoords <- function(distance, angle, DistOffset){
 
 # Define UI for application 
 list(
-    ui <- fluidPage( tabsetPanel(
+    ui <- fluidPage( headerPanel(img(src = "https://watershed.ucdavis.edu/files/cwsheader_0.png"))
+        , titlePanel( h5("Girls Saving the World Through Engineering - Land Survey of a Watershed Model", style = "color:#307EAE"))
+        , tabsetPanel(
         tabPanel( "Add Group Data"
                 , headerPanel("Add Data")
                 , sidebarLayout(
@@ -57,13 +61,15 @@ list(
                                 , actionButton("addButton", "Submit Group Data")
                                 , width = 2
                                 )
-                    , mainPanel()
+                    , mainPanel( (verbatimTextOutput(outputId = "answer"))
+                               , (verbatimTextOutput(outputId = "question")) 
+                    )
                             )
                 ),
         tabPanel( "Display Group Data"
                 , headerPanel("Our Group Data")
                 , sidebarLayout(sidebarPanel( tableOutput("tableGroup")
-                                            , width = 3
+                                            , width = 4
                                             )
                                , mainPanel(
                                     verticalLayout( 
@@ -98,15 +104,18 @@ list(
 
 # Define server logic 
 server <- function(input, output, session) {
-    dta1 <- data.frame( "Group" = numeric(0)
-                      , "Angle" = numeric(0)
-                      , "Distance" = numeric(0)
+    dta1 <- data.frame( "Group"     = numeric(0)
+                      , "Angle"     = numeric(0)
+                      , "Distance"  = numeric(0)
                       , "Elevation" = numeric(0)
                       )
-    valuesGroup <- reactiveValues()
+    valuesGroup    <- reactiveValues()
     valuesGroup$df <- dta1
-    valuesClass <- reactiveValues()
+    valuesClass    <- reactiveValues()
     valuesClass$df <- dta1
+    valuesIndx     <- reactiveValues()
+    valuesIndx$MsgA <- NA
+    valuesIndx$MsgB <- sample( x = (1:nrow(dtaRiddles)), size = 1 )
     observe(
         if(input$addButton > 0){
             newLine <- isolate(c( input$group
@@ -120,11 +129,36 @@ server <- function(input, output, session) {
         }
     )
     observe(
+        if(input$addButton > 0){
+            valuesIndx$MsgA <- isolate(valuesIndx$MsgB)
+            valuesIndx$MsgB <- sample( x = (1:nrow(dtaRiddles)), size = 1 )
+        }
+    )
+    observe(
         if(input$getButton > 0){
             dtaClass <- gs_read(sheet)
             valuesClass$df <- data.frame(dtaClass[-1,])
         }
     )
+     observe(
+         if(is.na(valuesIndx$MsgA)){
+            output$answer <- renderText(paste(""))
+         }else{
+              output$answer <- renderText(paste( "Question: "
+                                               , dtaRiddles[[2]][valuesIndx$MsgA]
+                                               , "Answer: "
+                                               , dtaRiddles[[3]][valuesIndx$MsgA]
+                                               , sep="\n"
+                                               )
+                                          )
+         }
+     )
+    output$question <- renderText(paste("Question: "
+                                 , dtaRiddles[[2]][valuesIndx$MsgB]
+                                 , sep="\n"
+                                     )
+                                 )
+    
     output$tableGroup <- renderTable({valuesGroup$df[, -1, drop = FALSE]})
     output$plotGroup <- renderPlot({
         dist <- valuesGroup$df[,3]
